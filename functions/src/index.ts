@@ -16,7 +16,7 @@ export const initUserData = functions.auth.user().onCreate((user) => {
         totalPortions: 0,
         paidPortions: 0,
         maxPortions: 0,
-        name: user.displayName
+        name: user.displayName || user.email
     }, {merge: true})
 });
 
