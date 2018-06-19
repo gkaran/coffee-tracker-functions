@@ -4,18 +4,23 @@ import * as functions from 'firebase-functions';
 admin.initializeApp(functions.config().firebase);
 
 export const portionsSum = functions.firestore
-    .document('/users/{userid}/portions/{portionid}')
-    .onWrite(change => updateSumForUser(change, 'totalPortions'));
+    .document('/portions/{portionid}')
+    .onWrite(change => updateUserStats(change, 'totalPortions'));
 
 export const paidPortionsSum = functions.firestore
-    .document('/users/{userid}/payments/{paymentid}')
-    .onWrite(change => updateSumForUser(change, 'paidPortions'));
+    .document('/payments/{paymentid}')
+    .onWrite(change => updateUserStats(change, 'paidPortions'));
 
 export const initUserData = functions.auth.user().onCreate((user) => {
-    return admin.firestore().collection('users').doc(user.uid).set({totalPortions: 0, paidPortions: 0}, {merge: true})
+    return admin.firestore().collection('users').doc(user.uid).set({
+        totalPortions: 0,
+        paidPortions: 0,
+        maxPortions: 0,
+        name: user.displayName
+    }, {merge: true})
 });
 
-function updateSumForUser(change, field) {
+function updateUserStats(change, field) {
     const portionsRef = change.after.ref.parent;
 
     let increment = 0;
@@ -30,3 +35,4 @@ function updateSumForUser(change, field) {
     const userRef = portionsRef.parent;
     return userRef.get().then((user) => userRef.set({[field]: user.get(field) + increment}, {merge: true}));
 }
+
