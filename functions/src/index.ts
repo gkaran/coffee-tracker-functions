@@ -8,40 +8,24 @@ const db = admin.firestore();
 //                        USER PORTION HANDLING
 // ========================================================================
 
-export const update_user_portions_on_portion_creation = functions.firestore
+export const update_user_portions = functions.firestore
     .document('/portions/{portionid}')
-    .onCreate((change, context) => {
-        const userId = context.auth.uid;
+    .onWrite((change, context) => {
+        const userId = change.after.exists ? change.after.get('user') : change.before.get('user');
+        if (!userId) {
+            return false;
+        }
         const userRef = db.doc(`/users/${userId}`);
-        const increment = change.get('amount') || 0;
-        return update_user_total_portions(context.eventId, userRef, userId, increment);
+        return update_user_total_portions(context.eventId, userRef, userId);
     });
 
-export const update_user_portions_on_portion_update = functions.firestore
-    .document('/portions/{portionid}')
-    .onUpdate((change, context) => {
-        const userId = context.auth.uid;
-        const userRef = db.doc(`/users/${userId}`);
-        const increment = (change.after.get('amount') || 0) - change.before.get('amount') || 0;
-        return update_user_total_portions(context.eventId, userRef, userId, increment);
-    });
-
-export const update_user_portions_on_portion_deletion = functions.firestore
-    .document('/portions/{portionid}')
-    .onDelete((change, context) => {
-        const userId = context.auth.uid;
-        const userRef = db.doc(`/users/${userId}`);
-        const increment = change.get('amount') || 0;
-        return update_user_total_portions(context.eventId, userRef, userId, -increment);
-    });
-
-function update_user_total_portions(eventId: string, userRef: FirebaseFirestore.DocumentReference, userId: string, increment: number) {
-    return db.runTransaction(transaction => transaction.get(userRef).then(user => {
-        const oldPortions = user.get('totalPortions') || 0;
-        const newPortions = oldPortions + increment;
-        console.log(`${eventId}: Updating total portions from ${oldPortions} to ${newPortions} for user ${userId}`);
-        return transaction.update(userRef, {totalPortions: newPortions});
-    }));
+function update_user_total_portions(eventId: string, userRef: FirebaseFirestore.DocumentReference, userId: string) {
+    return db.runTransaction(transaction => transaction.get(db.collection('/portions').where('user', '==', userId).select('amount'))
+        .then(portions => portions.docs.map(d => d.get('amount') || 0).reduce((a, b) => a + b, 0))
+        .then(totalPortions => {
+            console.log(`${eventId}: Updating total portions to ${totalPortions} for user ${userId}`);
+            return transaction.update(userRef, {totalPortions});
+        }));
 }
 
 
@@ -49,40 +33,24 @@ function update_user_total_portions(eventId: string, userRef: FirebaseFirestore.
 //                        USER PAYMENT HANDLING
 // ========================================================================
 
-export const update_user_payments_on_payment_creation = functions.firestore
+export const update_user_payments = functions.firestore
     .document('/payments/{paymentid}')
-    .onCreate((change, context) => {
-        const userId = context.auth.uid;
+    .onWrite((change, context) => {
+        const userId = change.after.exists ? change.after.get('user') : change.before.get('user');
+        if (!userId) {
+            return false;
+        }
         const userRef = db.doc(`/users/${userId}`);
-        const increment = change.get('portions') || 0;
-        return update_user_total_paid_portions(context.eventId, userRef, userId, increment);
+        return update_user_total_paid_portions(context.eventId, userRef, userId);
     });
 
-export const update_user_payments_on_payment_update = functions.firestore
-    .document('/payments/{paymentid}')
-    .onUpdate((change, context) => {
-        const userId = context.auth.uid;
-        const userRef = db.doc(`/users/${userId}`);
-        const increment = (change.after.get('portions') || 0) - change.before.get('portions') || 0;
-        return update_user_total_paid_portions(context.eventId, userRef, userId, increment);
-    });
-
-export const update_user_payments_on_payment_deletion = functions.firestore
-    .document('/payments/{paymentid}')
-    .onDelete((change, context) => {
-        const userId = context.auth.uid;
-        const userRef = db.doc(`/users/${userId}`);
-        const increment = change.get('portions') || 0;
-        return update_user_total_paid_portions(context.eventId, userRef, userId, -increment);
-    });
-
-function update_user_total_paid_portions(eventId: string, userRef: FirebaseFirestore.DocumentReference, userId: string, increment: number) {
-    return db.runTransaction(transaction => transaction.get(userRef).then(user => {
-        const oldPortions = user.get('paidPortions') || 0;
-        const newPortions = oldPortions + increment;
-        console.log(`${eventId}: Updating paid portions from ${oldPortions} to ${newPortions} for user ${userId}`);
-        return transaction.update(userRef, {paidPortions: newPortions});
-    }));
+function update_user_total_paid_portions(eventId: string, userRef: FirebaseFirestore.DocumentReference, userId: string) {
+    return db.runTransaction(transaction => transaction.get(db.collection('/payments').where('user', '==', userId).select('portions'))
+        .then(portions => portions.docs.map(d => d.get('portions') || 0).reduce((a, b) => a + b, 0))
+        .then(paidPortions => {
+            console.log(`${eventId}: Updating paid portions to ${paidPortions} for user ${userId}`);
+            return transaction.update(userRef, {paidPortions});
+        }));
 }
 
 
